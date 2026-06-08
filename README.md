@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=28&pause=1000&color=F5A623&center=true&vCenter=true&width=600&lines=⚡+VOLTCLOUD;Cloud+Energy+Monitoring+Platform;Real-time+%7C+Scalable+%7C+Firebase-powered" alt="VoltCloud" />
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=28&pause=1000&color=F5A623&center=true&vCenter=true&width=600&lines=VOLTCLOUD;Cloud+Energy+Monitoring+Platform;Real-time+%7C+Scalable+%7C+Firebase-powered" alt="VoltCloud" />
 
 <br/>
 
