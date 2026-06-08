@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voltaic | Live Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f3f7fa; font-family: 'Inter', sans-serif; }
+        .card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); overflow: hidden; }
+        .badge { background: #3b82f6; color: white; padding: 2px 10px; border-radius: 20px; font-size: 0.75rem; text-transform: uppercase; }
+        .label { color: #64748b; font-size: 0.875rem; }
+        .value { font-weight: 600; color: #1e293b; font-family: 'ui-monospace', monospace; }
+        .ts-box { background: #f8fafc; padding: 8px; border-radius: 8px; font-size: 0.7rem; border: 1px solid #f1f5f9; }
+    </style>
+</head>
+<body class="p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">⚡ Live Energy Analysis</h1>
+                <p class="text-gray-500">Connected Meter: <span id="displayMeterId" class="font-mono font-bold text-blue-600">Loading...</span></p>
+            </div>
+            <a href="hub.html" class="text-blue-600 font-semibold hover:underline">&larr; Back</a>
+        </header>
+
+        <div id="pinsContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <p class="text-gray-400 italic">Detecting device pins and streaming data...</p>
+        </div>
+    </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+        // 🔧 Replace with your Firebase config from:
+        // Firebase Console → Project Settings → Your Apps → SDK setup
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Format Firebase Timestamps
+    function formatTS(ts) {
+        if (!ts || !ts.toDate) return "--";
+        return ts.toDate().toLocaleString('en-US', { 
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' 
+        });
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            try {
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+                if (userDoc.exists()) {
+                    const espId = userDoc.data().esp_id;
+                    document.getElementById("displayMeterId").innerText = espId;
+                    loadDevicePins(espId);
+                }
+            } catch (err) { console.error("Auth error:", err); }
+        } else {
+            window.location.href = "login.html";
+        }
+    });
+
+    async function loadDevicePins(espId) {
+        const pinsContainer = document.getElementById("pinsContainer");
+        const pinsSnapshot = await getDocs(collection(db, "esp_devices", espId, "pins"));
+        
+        if(pinsSnapshot.empty) {
+            pinsContainer.innerHTML = "<p>No pins configured.</p>";
+            return;
+        }
+
+        pinsContainer.innerHTML = ""; 
+
+        pinsSnapshot.forEach((pinDoc) => {
+            const pinId = pinDoc.id;
+            const deviceType = pinDoc.data().device_type || "Unknown";
+            createPinCard(pinId, deviceType);
+            streamEnergyData(espId, pinId);
+        });
+    }
+
+    function createPinCard(pinId, type) {
+        const html = `
+            <div class="card" id="card_${pinId}">
+                <div class="bg-slate-800 p-4 flex justify-between items-center text-white">
+                    <span class="font-bold tracking-wide">${pinId}</span>
+                    <span class="badge">${type}</span>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-2 gap-x-8 gap-y-3 mb-6">
+                        <div class="flex justify-between border-b pb-1"><span class="label">Power</span><span class="value"><span id="pwr_${pinId}">--</span> W</span></div>
+                        <div class="flex justify-between border-b pb-1"><span class="label">Voltage</span><span class="value"><span id="vol_${pinId}">--</span> V</span></div>
+                        <div class="flex justify-between border-b pb-1"><span class="label">Current</span><span class="value"><span id="cur_${pinId}">--</span> A</span></div>
+                        
+                        <div class="col-span-2 flex justify-between border-b pb-1 bg-green-50/50 px-1">
+                            <span class="label text-green-700">Total Energy</span>
+                            <span class="value text-green-600"><span id="nrg_${pinId}">--</span> kWh</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="ts-box"><span class="text-gray-400 block uppercase text-[9px]">Window Start</span><span id="ws_${pinId}">--</span></div>
+                        <div class="ts-box"><span class="text-gray-400 block uppercase text-[9px]">Window End</span><span id="we_${pinId}">--</span></div>
+                        <div class="ts-box"><span class="text-gray-400 block uppercase text-[9px]">Created At (DB)</span><span id="ca_${pinId}">--</span></div>
+                    </div>
+                </div>
+            </div>`;
+        document.getElementById("pinsContainer").innerHTML += html;
+    }
+
+    function streamEnergyData(espId, pinId) {
+        const dataPath = collection(db, "energy_data", espId.toLowerCase(), "aggregates_15min", pinId, "data");
+        const q = query(dataPath, orderBy("window_start", "desc"), limit(1));
+
+        onSnapshot(q, (snap) => {
+            if (snap.empty) return;
+            const data = snap.docs[0].data();
+            
+            // Core Metrics
+            document.getElementById(`pwr_${pinId}`).innerText = data.avg_power?.toFixed(2) || "--";
+            document.getElementById(`vol_${pinId}`).innerText = data.avg_voltage?.toFixed(1) || "--";
+            document.getElementById(`cur_${pinId}`).innerText = data.avg_current?.toFixed(3) || "--";
+            document.getElementById(`nrg_${pinId}`).innerText = data.total_energy?.toFixed(4) || "--";
+            
+
+            // Timestamps
+            document.getElementById(`ws_${pinId}`).innerText = formatTS(data.window_start);
+            document.getElementById(`we_${pinId}`).innerText = formatTS(data.window_end);
+            document.getElementById(`ca_${pinId}`).innerText = formatTS(data.created_at);
+        });
+    }
+</script>
+</body>
+</html>

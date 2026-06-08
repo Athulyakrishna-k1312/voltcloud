@@ -1,0 +1,9 @@
+# Firebase secret key - NEVER push this
+backend/serviceAccountKey.json
+
+# Node modules - too heavy, regenerated via npm install
+backend/node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db

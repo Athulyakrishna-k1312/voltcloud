@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voltaic | Complete Profile</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+<style>
+body { font-family: 'Inter', sans-serif; }
+.hero-bg {
+    background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+}
+</style>
+</head>
+
+<body class="hero-bg min-h-screen flex items-center justify-center">
+
+<div class="bg-white shadow-xl rounded-3xl p-10 w-full max-w-lg border border-slate-100">
+
+    <h2 class="text-3xl font-bold text-center mb-8">Complete Your Profile</h2>
+    
+    <input id="meterId" type="text" readonly
+        class="w-full mb-4 px-4 py-3 border bg-slate-100 rounded-xl">
+
+    <input id="name" type="text" placeholder="Full Name"
+        class="w-full mb-4 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
+
+    <input id="phone" type="text" placeholder="Phone Number"
+        class="w-full mb-4 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
+
+    <input id="house_no" type="text" placeholder="House Number"
+        class="w-full mb-4 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
+
+    <input id="address" type="text" placeholder="Address"
+        class="w-full mb-4 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
+
+    <input id="district" type="text" placeholder="District"
+        class="w-full mb-4 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
+
+    <input id="branch" type="text" placeholder="Branch"
+        class="w-full mb-6 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
+
+    <button onclick="saveProfile()"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-full font-semibold transition">
+        Save & Continue
+    </button>
+
+    <p id="message" class="text-center mt-4 text-red-500"></p>
+
+</div>
+
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+        // 🔧 Replace with your Firebase config from:
+        // Firebase Console → Project Settings → Your Apps → SDK setup
+    };
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let currentUID = null;
+
+onAuthStateChanged(auth, async (user) => {
+
+    if(!user){
+        window.location.href = "login.html";
+        return;
+    }
+
+    currentUID = user.uid;
+
+    const userRef = doc(db, "users", currentUID);
+    const userSnap = await getDoc(userRef);
+
+    if(userSnap.exists()){
+        const data = userSnap.data();
+        document.getElementById("meterId").value = data.esp_id;
+    }
+});
+
+
+window.saveProfile = async function(){
+
+    const name = document.getElementById("name").value;
+    const phone = document.getElementById("phone").value;
+    const house_no = document.getElementById("house_no").value;
+    const address = document.getElementById("address").value;
+    const district = document.getElementById("district").value;
+    const branch = document.getElementById("branch").value;
+    const message = document.getElementById("message");
+
+    if(!name || !phone || !house_no || !address || !district || !branch){
+        message.innerText = "All fields are required.";
+        return;
+    }
+
+    try{
+
+        const userRef = doc(db, "users", currentUID);
+
+        await updateDoc(userRef, {
+            name: name,
+            phone: phone,
+            house_no: house_no,
+            address: address,
+            district: district,
+            branch: branch
+        });
+
+        window.location.href = "dashboard.html";
+
+    } catch(error){
+        message.innerText = error.message;
+    }
+};
+
+</script>
+
+</body>
+</html>

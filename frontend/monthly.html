@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voltaic | Monthly Insights</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+        .stat-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); }
+    </style>
+</head>
+<body class="p-6 md:p-10">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="text-blue-600"></i> Monthly Efficiency
+                </h1>
+                <p class="text-slate-500">System Overview: <span id="displayMeterId" class="font-mono text-blue-600 font-bold">...</span></p>
+            </div>
+            <div class="flex items-center gap-3">
+                <input type="month" id="monthPicker" class="border rounded-xl p-2.5 text-sm bg-white shadow-sm outline-none focus:ring-2 focus:ring-blue-500">
+                <a href="hub.html" class="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition">
+                    <i data-lucide="home" class="w-5 h-5 text-slate-600"></i>
+                </a>
+            </div>
+        </header>
+
+        <div class="flex gap-2 mb-8 overflow-x-auto pb-2" id="deviceTabs"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+            <div class="stat-card p-6 border-b-4 border-blue-500">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Monthly Energy</p>
+                <h3 class="text-3xl font-bold text-slate-800 mt-2"><span id="mTotalEnergy">--</span> <small class="text-sm font-medium text-slate-400">kWh</small></h3>
+            </div>
+            <div class="stat-card p-6 border-b-4 border-indigo-500">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Avg Monthly Power</p>
+                <h3 class="text-3xl font-bold text-slate-800 mt-2"><span id="mAvgPower">--</span> <small class="text-sm font-medium text-slate-400">W</small></h3>
+            </div>
+            <div class="stat-card p-6 border-b-4 border-amber-500">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Avg Voltage</p>
+                <h3 class="text-3xl font-bold text-slate-800 mt-2"><span id="mAvgVoltage">--</span> <small class="text-sm font-medium text-slate-400">V</small></h3>
+            </div>
+            <div class="stat-card p-6 border-b-4 border-emerald-500">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Days Recorded</p>
+                <h3 class="text-3xl font-bold text-slate-800 mt-2"><span id="mDayCount">--</span> <small class="text-sm font-medium text-slate-400">Days</small></h3>
+            </div>
+        </div>
+
+        <div class="stat-card p-8">
+            <h4 class="font-bold text-slate-700 mb-6">Device Share vs Monthly Total</h4>
+            <div class="h-[400px]">
+                <canvas id="monthlyChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, collection, getDocs, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+        // 🔧 Replace with your Firebase config from:
+        // Firebase Console → Project Settings → Your Apps → SDK setup
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentChart = null;
+    let selectedPin = "";
+    let deviceMap = {};
+
+    // Default to current month
+    const picker = document.getElementById('monthPicker');
+    const now = new Date();
+    picker.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) {
+                const espId = userDoc.data().esp_id;
+                document.getElementById("displayMeterId").innerText = espId;
+                await initTabs(espId);
+            }
+        } else {
+            window.location.href = "login.html";
+        }
+    });
+
+    async function initTabs(espId) {
+        const pinsSnap = await getDocs(collection(db, "esp_devices", espId, "pins"));
+        const container = document.getElementById("deviceTabs");
+        
+        pinsSnap.forEach((pinDoc) => {
+            const id = pinDoc.id;
+            const name = pinDoc.data().device_type || id;
+            deviceMap[id] = name;
+
+            const btn = document.createElement("button");
+            btn.className = "px-5 py-2 rounded-full border bg-white text-sm font-bold text-slate-500 hover:border-blue-500 transition-all shadow-sm whitespace-nowrap";
+            btn.innerText = name;
+            btn.onclick = () => {
+                selectedPin = id;
+                document.querySelectorAll('#deviceTabs button').forEach(b => b.classList.remove('bg-blue-600', 'text-white'));
+                btn.classList.add('bg-blue-600', 'text-white');
+                fetchMonthlyData(espId);
+            };
+            container.appendChild(btn);
+        });
+        if (container.firstChild) container.firstChild.click();
+    }
+
+    async function fetchMonthlyData(espId) {
+        const [year, month] = picker.value.split('-');
+        const targetMonth = new Date(year, month - 1, 1, 0, 0, 0);
+
+        const path = collection(db, "energy_data", espId.toLowerCase(), "aggregates_monthly", selectedPin, "data");
+        const q = query(path, where("month", "==", Timestamp.fromDate(targetMonth)));
+
+        const snap = await getDocs(q);
+        if (snap.empty) {
+            updateUI(null);
+            return;
+        }
+
+        const data = snap.docs[0].data();
+        updateUI(data);
+    }
+
+    function updateUI(data) {
+        if (!data) {
+            document.getElementById("mTotalEnergy").innerText = "0";
+            document.getElementById("mAvgPower").innerText = "--";
+            document.getElementById("mAvgVoltage").innerText = "--";
+            document.getElementById("mDayCount").innerText = "0";
+            if (currentChart) currentChart.destroy();
+            return;
+        }
+
+        document.getElementById("mTotalEnergy").innerText = data.monthly_total_energy?.toFixed(2);
+        document.getElementById("mAvgPower").innerText = data.monthly_avg_power?.toFixed(1);
+        document.getElementById("mAvgVoltage").innerText = data.monthly_avg_voltage?.toFixed(1);
+        document.getElementById("mDayCount").innerText = data.day_count;
+
+        renderChart(data);
+    }
+
+    function renderChart(data) {
+        const ctx = document.getElementById('monthlyChart').getContext('2d');
+        if (currentChart) currentChart.destroy();
+
+        currentChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: [deviceMap[selectedPin], 'Other System Load'],
+                datasets: [{
+                    data: [data.monthly_total_energy, 10], // Placeholder '10' for visual contrast
+                    backgroundColor: ['#3b82f6', '#f1f5f9'],
+                    borderWidth: 0,
+                    cutout: '70%'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
+
+    picker.onchange = () => fetchMonthlyData(document.getElementById("displayMeterId").innerText);
+    lucide.createIcons();
+</script>
+</body>
+</html>

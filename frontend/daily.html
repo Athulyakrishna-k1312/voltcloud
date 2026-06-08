@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voltaic | Daily Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { background-color: #f3f7fa; font-family: 'Inter', sans-serif; }
+        .glass-card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .stats-label { color: #64748b; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    </style>
+</head>
+<body class="p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">📊 Daily Analytics</h1>
+                <p class="text-gray-500">Connected ESP: <span id="displayMeterId" class="font-mono font-bold text-blue-600">Loading...</span></p>
+            </div>
+            <div class="flex items-center gap-4">
+                <input type="date" id="reportDate" class="border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none shadow-sm bg-white">
+                <a href="hub.html" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-700 transition shadow-md">back</a>
+            </div>
+        </header>
+
+        <div class="mb-8 flex gap-3 overflow-x-auto pb-2" id="deviceTabs"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            
+            <div class="glass-card p-5 border-t-4 border-blue-400">
+                <p class="stats-label">Avg Voltage</p>
+                <h3 class="text-2xl font-bold text-gray-800 mt-1"><span id="avgVoltage">--</span> <small class="text-xs font-normal text-gray-400">V</small></h3>
+            </div>
+            <div class="glass-card p-5 border-t-4 border-indigo-400">
+                <p class="stats-label">Avg Current</p>
+                <h3 class="text-2xl font-bold text-gray-800 mt-1"><span id="avgCurrent">--</span> <small class="text-xs font-normal text-gray-400">A</small></h3>
+            </div>
+            <div class="glass-card p-5 border-t-4 border-amber-400">
+                <p class="stats-label">Avg Power</p>
+                <h3 class="text-2xl font-bold text-gray-800 mt-1"><span id="avgPower">--</span> <small class="text-xs font-normal text-gray-400">W</small></h3>
+            </div>
+            <div class="glass-card p-5 border-t-4 border-emerald-400">
+                <p class="stats-label">Daily Energy</p>
+                <h3 class="text-2xl font-bold text-emerald-600 mt-1"><span id="totalEnergy">--</span> <small class="text-xs font-normal text-gray-400">kWh</small></h3>
+            </div>
+
+            <div class="lg:col-span-4 glass-card p-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="font-bold text-gray-700 text-lg" id="chartTitle">Daily Load Profile</h2>
+                    <div class="text-xs text-gray-400" id="sampleDisplay">Samples: 0</div>
+                </div>
+                <div class="h-[350px]">
+                    <canvas id="dailyChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, collection, getDocs, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
+        // 🔧 Replace with your Firebase config from:
+        // Firebase Console → Project Settings → Your Apps → SDK setup
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let myChart = null;
+    let selectedPin = "";
+    let deviceMap = {}; 
+
+    const dateInput = document.getElementById('reportDate');
+    dateInput.valueAsDate = new Date();
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) {
+                const espId = userDoc.data().esp_id;
+                document.getElementById("displayMeterId").innerText = espId;
+                await fetchDevices(espId);
+            }
+        } else {
+            window.location.href = "login.html";
+        }
+    });
+
+    async function fetchDevices(espId) {
+        const pinsSnap = await getDocs(collection(db, "esp_devices", espId, "pins"));
+        const tabsContainer = document.getElementById("deviceTabs");
+        tabsContainer.innerHTML = "";
+
+        pinsSnap.forEach((pinDoc) => {
+            const pinData = pinDoc.data();
+            const pinId = pinDoc.id;
+            const deviceName = pinData.device_type || pinId;
+            deviceMap[pinId] = deviceName;
+
+            const btn = document.createElement("button");
+            btn.className = "px-6 py-2 rounded-full bg-white border border-gray-200 text-sm font-bold text-gray-500 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm whitespace-nowrap";
+            btn.innerText = deviceName;
+            btn.onclick = () => {
+                selectedPin = pinId;
+                updateSelectionUI(btn);
+                loadFilteredReport(espId);
+            };
+            tabsContainer.appendChild(btn);
+        });
+
+        if (tabsContainer.firstChild) tabsContainer.firstChild.click();
+    }
+
+    function updateSelectionUI(activeBtn) {
+        document.querySelectorAll('#deviceTabs button').forEach(b => {
+            b.classList.remove('bg-blue-600', 'text-white', 'border-blue-600');
+            b.classList.add('bg-white', 'text-gray-500');
+        });
+        activeBtn.classList.add('bg-blue-600', 'text-white', 'border-blue-600');
+        activeBtn.classList.remove('bg-white', 'text-gray-500');
+    }
+
+    async function loadFilteredReport(espId) {
+        const selectedDateStr = dateInput.value; 
+        const startOfDay = new Date(selectedDateStr);
+        startOfDay.setHours(0, 0, 0, 0);
+
+        document.getElementById("chartTitle").innerText = `${deviceMap[selectedPin]} Analysis - ${startOfDay.toLocaleDateString()}`;
+
+        const dataPath = collection(db, "energy_data", espId.toLowerCase(), "aggregates_daily", selectedPin, "data");
+        const q = query(dataPath, where("date", "==", Timestamp.fromDate(startOfDay)));
+
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            resetStats();
+            return;
+        }
+
+        const data = snapshot.docs[0].data();
+        
+        // Display core metrics from your screenshots
+        document.getElementById("avgVoltage").innerText = data.daily_avg_voltage?.toFixed(1) || "0";
+        document.getElementById("avgCurrent").innerText = data.daily_avg_current?.toFixed(3) || "0";
+        document.getElementById("avgPower").innerText = data.daily_avg_power?.toFixed(2) || "0";
+        document.getElementById("totalEnergy").innerText = data.daily_total_energy?.toFixed(4) || "0";
+        document.getElementById("sampleDisplay").innerText = `Total Samples: ${data.total_samples || 0}`;
+
+        renderChart([deviceMap[selectedPin]], [data.daily_total_energy]);
+    }
+
+    function resetStats() {
+        ["avgVoltage", "avgCurrent", "avgPower", "totalEnergy"].forEach(id => {
+            document.getElementById(id).innerText = "--";
+        });
+        document.getElementById("sampleDisplay").innerText = "No data for this date";
+        if (myChart) myChart.destroy();
+    }
+
+    dateInput.onchange = () => {
+        const espId = document.getElementById("displayMeterId").innerText;
+        loadFilteredReport(espId);
+    };
+
+    function renderChart(labels, values) {
+        const ctx = document.getElementById('dailyChart').getContext('2d');
+        if (myChart) myChart.destroy();
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Daily Consumption (kWh)',
+                    data: values,
+                    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                    borderColor: '#3b82f6',
+                    borderWidth: 1,
+                    borderRadius: 10
+                }]
+            },
+            options: { 
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+</script>
+</body>
+</html>
