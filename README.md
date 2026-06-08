@@ -318,11 +318,14 @@ Returns the current in-memory aggregation buffer. Useful for verifying data is b
 
 ## 📸 Dashboard Preview
 
-| View | Description |
-|------|-------------|
-| **Live (15-min)** | Per-appliance cards showing real-time power, voltage, current |
-| **Daily Analytics** | Bar chart of hourly consumption + KPIs (avg power, total kWh) |
-| **Monthly Efficiency** | Doughnut chart of appliance share + monthly averages |
+**Live Energy Analysis (15-min)**
+![Live Analysis](./assets/analysis_preview.png)
+
+**Daily Analytics**
+![Daily](./assets/daily_preview.png)
+
+**Monthly Efficiency**
+![Monthly](./assets/monthly_preview.png)
 
 ---
 
