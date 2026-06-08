@@ -16,7 +16,7 @@
 
 <br/>
 
-[![Made with ❤️ by Group 13](https://img.shields.io/badge/Made%20with%20%E2%9D%A4%EF%B8%8F%20by-Illusive%20Coders-ff69b4?style=flat-square)](https://github.com/)
+[![Made with ❤️ by Group 13](https://img.shields.io/badge/Made%20with%20%E2%9D%A4%EF%B8%8F%20by-Group%2013-ff69b4?style=flat-square)](https://github.com/)
 ![KTU Mini Project](https://img.shields.io/badge/KTU-Mini%20Project%202026-blue?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Completed-brightgreen?style=flat-square)
 
