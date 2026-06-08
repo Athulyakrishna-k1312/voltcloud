@@ -77,10 +77,9 @@ This was built as a KTU B.Tech Mini Project (S4 IT, GEC Palakkad, 2025–26).
 │                                                                     │
 │   Express.js Server          Cron Scheduler (node-cron)             │
 │   ├── POST /send-data    ←   ├── Every 1 min   → 15_min.js          │
-│   └── GET  /debug-memory     ├── 23:59 daily   → daily_with_        │
-│                              │                   deletion.js        │
-│                              └── 23:59 EOM     → monthly_           │
-│                                                  aggregation.js     │
+│   └── GET  /debug-memory     ├── 23:59 daily   → daily_auto.js      │
+│                              └── 23:59 last    → monthly_auto.js    │
+│                                  day of month                       │
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │ HTTP POST (1 req/sec)
 ┌───────────────────────────────▼─────────────────────────────────────┐
@@ -114,7 +113,7 @@ This was built as a KTU B.Tech Mini Project (S4 IT, GEC Palakkad, 2025–26).
 - **Monthly Efficiency** — doughnut chart of appliance share, monthly averages
 
 ### 🧪 Developer Experience
-- **ESP Simulator** (`esp_stimulator.js`) — generates realistic data with daily usage patterns (morning/evening peaks, night lows) without physical hardware
+- **ESP Simulator** (`stimulator.js`) — generates realistic data with daily usage patterns (morning/evening peaks, night lows) without physical hardware
 - **Debug endpoint** (`GET /debug-memory`) — inspect live in-memory aggregation state
 
 ---
@@ -179,20 +178,25 @@ Dashboard (Web Client)
 voltcloud/
 │
 ├── backend/
-│   ├── esp_stimulator.js          # IoT device simulator (dev/testing)
-│   ├── 15_min.js                  # Express server + 15-min aggregation
-│   ├── daily_with_deletion.js     # Daily rollup + 15-min data cleanup
-│   ├── monthly_aggregation_       # Monthly rollup scheduler
-│   │   scheduler.js
-│   ├── serviceAccountKey.json     # ← NOT in repo (add to .gitignore!)
+│   ├── 15_min.js                  # Express server + real-time 15-min aggregation
+│   ├── stimulator.js              # IoT device simulator (dev/testing)
+│   ├── daily_auto.js              # Daily rollup — auto scheduled at 23:59
+│   ├── daily_current.js           # Daily rollup — run manually for testing
+│   ├── monthly_auto.js            # Monthly rollup — triggers on last day of month at 23:59
+│   ├── monthly_current.js         # Monthly rollup — run manually for testing
+│   ├── serviceAccountKey.json     # ← NOT in repo (excluded via .gitignore)
 │   └── package.json
 │
 ├── frontend/
-│   ├── index.html                 # Login / landing
-│   ├── dashboard.html             # Main analytics dashboard
-│   └── assets/
-│       ├── css/
-│       └── js/
+│   ├── index.html                 # Landing page
+│   ├── login.html                 # User login
+│   ├── register.html              # User registration
+│   ├── hub.html                   # Device hub / home after login
+│   ├── analysis.html              # Live 15-min energy analysis
+│   ├── daily.html                 # Daily analytics dashboard
+│   ├── monthly.html               # Monthly efficiency dashboard
+│   ├── profile.html               # User profile
+│   └── settings.html              # App settings
 │
 └── README.md
 ```
@@ -237,13 +241,22 @@ The server starts on `http://localhost:5000`. Cron jobs activate automatically.
 ### 5. Run the ESP simulator (in a new terminal)
 
 ```bash
-node esp_stimulator.js
+node stimulator.js
 ```
 
 You should see live readings being sent every second:
 ```
 [10:32:15] #0001 | P:142W | V:231.4V | I:0.614A | PF:0.881 | Avg:142W
 [10:32:16] #0002 | P:145W | V:229.8V | I:0.631A | PF:0.873 | Avg:143W
+```
+
+### 6. Test aggregation manually (optional)
+
+The `_auto` scripts run on a real-time cron schedule (daily at 23:59, monthly on the last day). For immediate testing without waiting, use the `_current` variants:
+
+```bash
+node daily_current.js      # runs daily aggregation right now
+node monthly_current.js    # runs monthly aggregation right now
 ```
 
 ### 6. Open the dashboard
