@@ -50,7 +50,7 @@ The result is a system where:
 - Historical data is **queryable in milliseconds** from Firestore
 - Storage costs stay bounded even as usage data grows indefinitely
 
-This was built as a KTU B.Tech Mini Project (S4 IT, GEC Palakkad, 2025–26).
+This was built as a KTU B.Tech Mini Project (S6 IT, GEC Palakkad, 2025–26).
 
 ---
 
